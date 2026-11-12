@@ -1,6 +1,7 @@
 import { page, userEvent } from "vite-plus/test/browser";
 import { describe, expect, it, vi } from "vite-plus/test";
 
+import "~/index.css";
 import { render } from "../../../test/render";
 import { Sidebar, SidebarProvider, SidebarRail, SidebarTrigger, useSidebar } from "./sidebar";
 
@@ -70,6 +71,36 @@ describe("Sidebar", () => {
     rail.dispatchEvent(new PointerEvent("pointerup", { ...pointer, clientX: left + 80 }));
 
     expect(onResize).toHaveBeenCalledTimes(1);
+  });
+
+  it("peeks a collapsed sidebar over the content while its trigger is hovered", async () => {
+    await page.viewport(1280, 800);
+    const storageKey = "sidebar_peek_test";
+    localStorage.setItem(storageKey, "false");
+    await using screen = await render(
+      <SidebarProvider storageKey={storageKey}>
+        <Sidebar collapsible="offcanvas">Threads</Sidebar>
+        <SidebarTrigger />
+        <main className="ml-auto h-40 w-40" data-testid="content" />
+      </SidebarProvider>,
+      { router: false /* no routes involved */ },
+    );
+    const sidebar = screen.container.querySelector<HTMLElement>('[data-slot="sidebar"]')!;
+    const gap = sidebar.querySelector<HTMLElement>('[data-slot="sidebar-gap"]')!;
+    const container = sidebar.querySelector<HTMLElement>('[data-slot="sidebar-container"]')!;
+    expect(sidebar.inert).toBe(true);
+
+    await userEvent.hover(screen.getByRole("button", { name: "Toggle Sidebar" }));
+    await vi.waitFor(() => expect(sidebar.inert).toBe(false));
+    expect(sidebar.dataset.peek).toBe("true");
+    expect(container.getBoundingClientRect().left).toBe(0);
+    expect(gap.getBoundingClientRect().width).toBe(0);
+    expect(localStorage.getItem(storageKey)).toBe("false");
+
+    await userEvent.hover(screen.getByTestId("content"));
+    await vi.waitFor(() => expect(sidebar.inert).toBe(true));
+    expect(sidebar.dataset.peek).toBeUndefined();
+    localStorage.removeItem(storageKey);
   });
 });
 
